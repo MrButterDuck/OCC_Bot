@@ -39,9 +39,7 @@ GROUP_ID = id группы
 python main.py
 ```
 📁 Структура проекта
-bash
-Копировать
-Редактировать
+```bash
 oss-bot/
 ├── main.py              # основной файл бота
 ├── json_storage.py      # файл хранилища данных
@@ -49,3 +47,4 @@ oss-bot/
 ├── requirements.txt     # зависимости проекта
 ├── README.md            # эта инструкция
 └── ...
+```
