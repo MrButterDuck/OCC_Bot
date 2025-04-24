@@ -1,12 +1,15 @@
 import logging
 import asyncio
 from aiogram import Bot, Dispatcher, types
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ErrorEvent
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ErrorEvent, Message
+from aiogram.enums.chat_type import ChatType
+from aiogram import BaseMiddleware
 from aiogram.filters import Command
 import os
 from dotenv import load_dotenv
 from json_storage import JsonStorage
 import traceback
+from typing import Callable, Dict, Awaitable, Any
 
 load_dotenv()
 
@@ -32,32 +35,31 @@ dp = Dispatcher()
 main_menu_keyboard = ReplyKeyboardMarkup(
     keyboard=[
         [
-            KeyboardButton(text="Напишите обращение")
+            KeyboardButton(text="Написать обращение")
         ],
         [
-            KeyboardButton(text="Опищите предложение или инициативу")
+            KeyboardButton(text="Предложение или инициатива")
         ]],
     resize_keyboard=True
 )
 
-# Клавиатура с вариантами столовых
 canteen_keyboard = ReplyKeyboardMarkup(
     keyboard=[
         [
-            KeyboardButton(text="Проживание"),
-            KeyboardButton(text="Степендия и материальная помощь")
+            KeyboardButton(text="Проживание 🛏️"),
+            KeyboardButton(text="Стипендия и материальная помощь 💸")
         ],
         [
-            KeyboardButton(text="Инфраструктура"),
-            KeyboardButton(text="International student")
+            KeyboardButton(text="Инфраструктура 🏗️"),
+            KeyboardButton(text="International student 🌍")
         ],
         [
-            KeyboardButton(text="Студобъединения и мероприятия"),
-            KeyboardButton(text="Обучение")
+            KeyboardButton(text="Студобъединения и мероприятия 🎉"),
+            KeyboardButton(text="Обучение 📚")
         ],
         [
-            KeyboardButton(text="Рапорты и акты"),
-            KeyboardButton(text="другое")
+            KeyboardButton(text="Рапорты и акты 📄"),
+            KeyboardButton(text="Другое ❓")
         ],
         [
             KeyboardButton(text="Вернуться в начало 🔙")
@@ -70,34 +72,71 @@ canteen_keyboard = ReplyKeyboardMarkup(
 media_keyboard = ReplyKeyboardMarkup(
     keyboard=[
         [
-            KeyboardButton(text="Пропустить отправку медиа")
+            KeyboardButton(text="Пропустить отправку медиа 📵")
         ],
         [
             KeyboardButton(text="Вернуться в начало 🔙")
-        ]],
-
+        ]
+    ],
     resize_keyboard=True
 )
 
+# Клавиатура для отправки обращения
 end_keyboard = ReplyKeyboardMarkup(
     keyboard=[
         [
             KeyboardButton(text="Отправить обращение ✅"),
             KeyboardButton(text="Вернуться в начало 🔙")
-        ]],
+        ]
+    ],
     resize_keyboard=True
 )
 
+# Клавиатура только с кнопкой возврата
 back_keyboard = ReplyKeyboardMarkup(
     keyboard=[
         [
             KeyboardButton(text="Вернуться в начало 🔙")
-        ]],
+        ]
+    ],
     resize_keyboard=True
 )
 
 # Словарь для хранения данных пользователей
 user_data = JsonStorage()
+
+
+# Обработка чатов
+class ChatFilterMiddleware(BaseMiddleware):
+    def __init__(self, bot: Bot):
+        self.bot = bot
+
+    async def __call__(
+        self,
+        handler: Callable[[Message, Dict[str, Any]], Awaitable[Any]],
+        event: Message,
+        data: Dict[str, Any]
+    ) -> Any:
+        chat = event.chat
+
+        if chat.type == ChatType.PRIVATE:
+            return await handler(event, data)
+
+        if chat.type in {ChatType.GROUP, ChatType.SUPERGROUP}:
+            if chat.id == GROUP_ID:
+                return 
+            else:
+                try:
+                    await self.bot.leave_chat(chat.id)
+                    print(f"Left unauthorized group: {chat.title} ({chat.id})")
+                except Exception as e:
+                    print(f"Failed to leave chat {chat.id}: {e}")
+                return 
+
+        return
+
+
+dp.message.middleware(ChatFilterMiddleware(bot=bot))
 
 
 # Основная команда /start
@@ -112,15 +151,14 @@ async def send_welcome(message: types.Message):
     user_data.delete(user_id)
     user_data.set(user_id, {"stage": "main_menu"})  # Начальный этап
     await message.answer(
-        "Вас приветствует Объединенный совет студентов!\n\n"
-        "Здесь вы можете обратиться за помощью в трудной ситуации,"
-        "решением проблемы или консультацией по любым вопросам Университета\n\n"
-        "💡Кроме этого, вы можете внести предложение по любому вопросу,"
-        "затрагивающему студентов\n\n"
-        "Мы рассмотрим ваше предложение, инициативу и начнем работу над ней,"
-        "либо дадим обратную связь и поможем с реализацией\n\n"
-        "По экстренным вопросам пишите [Герману](https://t.me/herman_east) – "
-        "Председателю Объединенного совета студентов",
+        "Вас приветствует Объединённый совет студентов!\n\n"
+        "Здесь вы можете обратиться за помощью в трудной ситуации, с решением проблемы "
+        "или за консультацией по любым вопросам, касающимся Университета.\n\n"
+        "💡 Кроме того, вы можете внести предложение по любому вопросу, затрагивающему студентов.\n\n"
+        "Мы рассмотрим ваше предложение или инициативу, начнём работу над ней либо дадим обратную связь "
+        "и поможем с реализацией.\n\n"
+        "По экстренным вопросам пишите [Герману](https://t.me/herman_east) — председателю "
+        "Объединённого совета студентов.",
         reply_markup=main_menu_keyboard,
         parse_mode='Markdown'
     )
@@ -128,8 +166,8 @@ async def send_welcome(message: types.Message):
 
 # Обработка выбора действия
 @dp.message(lambda message: message.text in [
-    "Напишите обращение",
-    "Опищите предложение или инициативу"
+    "Написать обращение",
+    "Предложение или инициатива"
 ])
 async def handle_action_selection(message: types.Message):
     user_id = message.from_user.id
@@ -153,7 +191,7 @@ async def handle_canteen_selection(message: types.Message):
     cur_user_data["canteen"] = message.text
     cur_user_data["stage"] = "text_input"
     user_data.set(user_id, cur_user_data)
-    if user_data.get(user_id)["action"] == "Напишите обращение":
+    if user_data.get(user_id)["action"] == "Написать обращение":
         await message.answer(
             "Напишите текст обращения\n\n"
             "(медиафайлы вы можете приложить в следующем шаге)",
@@ -186,9 +224,9 @@ async def handle_text_input(message: types.Message):
     user_data.set(user_id, cur_user_data)
     await message.answer(
         "К сообщению вы можете приложить фото или видео\n\n"
-        "Если вы не хотите прикладывать фото или видео -"
-        "нажмите «‎Пропустить отправку медиа» для завершения\n\n"
-        "После отправки всех медиа, нужно нажать на «Отправить обращение ✅»,"
+        "Если вы не хотите прикладывать фото или видео - "
+        "нажмите «Пропустить отправку медиа 📵» для завершения\n\n"
+        "После отправки всех медиа, нужно нажать на «Отправить обращение ✅», "
         "чтобы перейти к следующему шагу",
         reply_markup=media_keyboard
     )
@@ -203,7 +241,7 @@ async def handle_media(message: types.Message):
     cur_user_data = user_data.get(user_id)
     cur_user_data["sending_files"] = True
     # Если пользователь нажал "Пропустить отправку медиа"
-    if message.text in ("Пропустить отправку медиа", "Отправить обращение ✅"):
+    if message.text in ("Пропустить отправку медиа 📵", "Отправить обращение ✅"):
         await finalize_survey(message)
         return
 
@@ -224,14 +262,14 @@ async def handle_media(message: types.Message):
     if len(cur_user_data["media_files"]) >= 10 and cur_user_data["sending_files"] == True:
         cur_user_data["sending_files"] = False
         await message.answer(
-            "Добавлено максимальное количество файлов."
-            "Нажмите 'Отправить обращение' для завершения.",
+            "Добавлено максимальное количество файлов.\n"
+            "Нажмите 'Отправить обращение ✅' для завершения.",
             reply_markup=end_keyboard
         )
     elif cur_user_data["sending_files"] == True:
         cur_user_data["sending_files"] = False
         await message.answer(
-            f'Файлов добавлено: {len(cur_user_data["media_files"])}\n'
+            f'Файлов добавлено: {len(cur_user_data["media_files"])}/10\n'
             "Вы можете добавить еще файлы при их наличии.",
             reply_markup=end_keyboard
         )
@@ -284,7 +322,7 @@ async def finalize_survey(message: types.Message):
 
     # Отправляем финальное сообщение пользователю
     await message.answer(
-        "Ваше сообщение отправлено! Мы с вами свяжемся",
+        "Ваше сообщение отправлено!\nМы с вами свяжемся❤",
         reply_markup=back_keyboard
     )
 
