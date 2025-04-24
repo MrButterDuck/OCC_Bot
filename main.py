@@ -123,7 +123,7 @@ class ChatFilterMiddleware(BaseMiddleware):
             return await handler(event, data)
 
         if chat.type in {ChatType.GROUP, ChatType.SUPERGROUP}:
-            if chat.id == GROUP_ID:
+            if str(chat.id) == str(GROUP_ID):
                 return 
             else:
                 try:
@@ -319,6 +319,8 @@ async def finalize_survey(message: types.Message):
     # Если есть медиа, отправляем их как группу
     if media_group:
         await bot.send_media_group(chat_id=GROUP_ID, media=media_group)
+    else:
+        await bot.send_message(chat_id=GROUP_ID, text=result_text)
 
     # Отправляем финальное сообщение пользователю
     await message.answer(
