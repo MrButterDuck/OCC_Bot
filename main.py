@@ -1,11 +1,12 @@
 import logging
 import asyncio
 from aiogram import Bot, Dispatcher, types
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ErrorEvent
 from aiogram.filters import Command
 import os
 from dotenv import load_dotenv
 from json_storage import JsonStorage
+import traceback
 
 load_dotenv()
 
@@ -175,7 +176,7 @@ async def handle_text_input(message: types.Message):
             "Медиафайлы можно прикрепить на следующем этапе."
         )
         return
-    
+
     user_id = message.from_user.id
     cur_user_data = user_data.get(user_id)
     cur_user_data["text"] = message.text
@@ -245,6 +246,18 @@ async def fallback_handler(message):
     )
 
 
+@dp.error()
+async def global_error_handler(event: ErrorEvent):
+    error_text = (
+            "⚠️ *Произошла ошибка у бота:*\n"
+            f"`{type(event).__name__}: {event.exception}`\n\n"
+            "*Traceback:*\n"
+            f"```{traceback.format_exc()[-1500:]}```"
+        )
+    await bot.send_message(GROUP_ID, error_text, parse_mode="Markdown")
+    return True
+
+
 # Завершение опроса и отправка данных
 async def finalize_survey(message: types.Message):
     user_id = message.from_user.id
@@ -267,7 +280,7 @@ async def finalize_survey(message: types.Message):
 
     # Если есть медиа, отправляем их как группу
     if media_group:
-        await bot.send_media_group(chat_id=user_id, media=media_group)
+        await bot.send_media_group(chat_id=GROUP_ID, media=media_group)
 
     # Отправляем финальное сообщение пользователю
     await message.answer(
